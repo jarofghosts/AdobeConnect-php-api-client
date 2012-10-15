@@ -1,10 +1,11 @@
 <?php
 
 /*
- * AdobeConnect 8 api client
- * @see https://github.com/sc0rp10/AdobeConnect-php-api-client
+ * AdobeConnect 8 api client,
+ * fork by Jesse Keane
+ * @see https://github.com/jarofghosts/AdobeConnect-php-api-client
  * @see http://help.adobe.com/en_US/connect/8.0/webservices/index.html
- * @version 0.1a
+ * @version 1
  *
  * Copyright 2012, sc0rp10
  * https://weblab.pro
@@ -18,6 +19,7 @@ class Connect
 {
 
 	/**
+	 * @const
 	 * adobe connect username
 	 */
 
@@ -31,13 +33,13 @@ class Connect
 
 	/**
 	 * @const
-	 * your personally api URL
+	 *  personal api URL
 	 */
 	const BASE_DOMAIN = '';
 
 	/**
 	 * @const
-	 * your personally root-folder id
+	 * personal root folder id
 	 * @see http://forums.adobe.com/message/2620180#2620180
 	 */
 	const ROOT_FOLDER_ID = 0; //root folder id
@@ -111,6 +113,19 @@ class Connect
 		return $this->makeRequest( 'common-info' );
 
 	}
+	/**
+	 * change user to perform all actions afterwards
+	 * 
+	 * @param array $credentials
+	 */
+	public function asUser( $credentials = array(
+		'login' => self::USERNAME,
+		'password' => self::PASSWORD ) ) {
+
+		$this->authorized = false;
+		$this->makeAuth( $credentials );
+
+	}
 
 	/**
 	 * create user
@@ -133,6 +148,7 @@ class Connect
 			'has-children' => 0
 				)
 		);
+
 		return $result;
 
 	}
@@ -220,7 +236,7 @@ class Connect
 	 */
 	public function getUrlBase() {
 
-		return "https://whatever.adobeconnect.com";
+		return substr(self::BASE_DOMAIN, 0, -5);
 
 	}
 
@@ -235,8 +251,7 @@ class Connect
 		$result = $this->makeRequest( 'sco-info', array(
 			'sco-id' => $sco_id
 				) );
-
-		return $result['sco']['sco-url'];
+		return $result['sco']['url-path'];
 
 	}
 
@@ -248,14 +263,15 @@ class Connect
 	 *
 	 * @return array
 	 */
-	public function createFolder( $name, $url ) {
+	public function createFolder( $name, $parent_folder = null ) {
+
+		$parent_folder = $parent_folder ? : self::FOLDER_ID;
 
 		$result = $this->makeRequest( 'sco-update', array(
 			'type' => 'folder',
 			'name' => $name,
-			'folder-id' => self::FOLDER_ID,
-			'depth' => 1,
-			'url-path' => $url
+			'folder-id' => $parent_folder,
+			'depth' => 1
 				)
 		);
 		return $result['sco']['@attributes']['sco-id'];
@@ -263,7 +279,23 @@ class Connect
 	}
 
 	/**
-	 * create meeting
+	 * Check for a folder's existence.
+	 * 
+	 * @param string $search
+	 */
+	public function checkFolder( $search ) {
+		$results = $this->makeRequest( 'sco-search-by-field', array(
+			'query' => $search,
+			'filter-type' => 'folder',
+			'field' => 'name'
+				) );
+
+		return ( isset( $results['sco-search-by-field-info'] ) && count( $results['sco-search-by-field-info'] ) > 0);
+
+	}
+
+	/**
+	 * create a new meeting
 	 *
 	 * @param int    $folder_id
 	 * @param string $name
@@ -271,16 +303,43 @@ class Connect
 	 * @param string $date_end
 	 * @param string $url
 	 *
-	 * @return array
+	 * @return string
 	 */
-	public function createMeeting( $folder_id, $name, $date_begin, $date_end, $url ) {
+	public function createMeeting( $folder_id, $name, $description, $date_begin, $date_end ) {
+
 		$result = $this->makeRequest( 'sco-update', array(
 			'type' => 'meeting',
 			'name' => $name,
+			'description' => $description,
 			'folder-id' => $folder_id,
-			'date-begin' => $date_begin,
-			'date-end' => $date_end,
-			'url-path' => $url
+			'date-begin' => date( 'Y-m-d\TH:i:sO', strtotime( $date_begin ) ),
+			'date-end' => date( 'Y-m-d\TH:i:sO', strtotime( $date_end ) )
+				)
+		);
+		return $result['sco']['@attributes']['sco-id'];
+
+	}
+
+	/**
+	 * update meeting_id with new name, description and date_begin/date_end,
+	 * note: date will attempt to auto-format to ISO-8601 as per the connect api standard using php's strtotime
+	 * 
+	 * @param int $meeting_id
+	 * @param string $name
+	 * @param string $description
+	 * @param string $date_begin
+	 * @param string $date_end
+	 * @return string
+	 */
+	public function updateMeeting( $meeting_id, $name, $description, $date_begin, $date_end ) {
+
+		$result = $this->makeRequest( 'sco-update', array(
+			'type' => 'meeting',
+			'name' => $name,
+			'description' => $description,
+			'sco-id' => $meeting_id,
+			'date-begin' => date( 'Y-m-d\TH:i:sO', strtotime( $date_begin ) ),
+			'date-end' => date( 'Y-m-d\TH:i:sO', strtotime( $date_end ) )
 				)
 		);
 		return $result['sco']['@attributes']['sco-id'];
@@ -295,8 +354,7 @@ class Connect
 	 *
 	 * @return mixed
 	 */
-	public function inviteUserToMeeting( $meeting_id, $email ) {
-		$user_id = $this->getUserByEmail( $email, true );
+	public function addUserToMeeting( $meeting_id, $user_id ) {
 
 		$result = $this->makeRequest( 'permissions-update', array(
 			'principal-id' => $user_id,
@@ -304,21 +362,116 @@ class Connect
 			'permission-id' => 'view'
 				)
 		);
+
 		return $result;
 
 	}
 
+	/**
+	 * revoke a user's access to a meeting
+	 * 
+	 * @param string $meeting_id
+	 * @param string $email
+	 * @return mixed
+	 */
+	public function removeUserFromMeeting( $meeting_id, $email ) {
+		$user_id = $this->getUserByEmail( $email, true );
+
+		$result = $this->makeRequest( 'permissions-update', array(
+			'principal-id' => $user_id,
+			'acl-id' => $meeting_id,
+			'permission-id' => 'remove'
+				)
+		);
+		return $result;
+
+	}
+
+	/**
+	 * get all users associated with the meeting
+	 * 
+	 * @param string $meeting_id
+	 * @return array
+	 */
 	public function getMeetingUsers( $meeting_id ) {
 
 		return $this->makeRequest( 'permissions-info', array(
-					'acl-id' => $meeting_id,
-					'permission-id' => 'view'
+					'acl-id' => $meeting_id
 						)
 		);
 
 	}
 
+	/**
+	 * add a user to a group
+	 * 
+	 * @param string $user_id
+	 * @param string $group_id
+	 * @return mixed
+	 */
+	public function addUserToGroup( $user_id, $group_id ) {
+
+		return $this->makeRequest( 'group-membership-update', array(
+					'group-id' => $group_id,
+					'principal-id' => $user_id,
+					'is-member' => 'true'
+				) );
+
+	}
+
+	/**
+	 * remove a user from a group
+	 * 
+	 * @param string $user_id
+	 * @param string $group_id
+	 * @return mixed
+	 */
+	public function removeUserFromGroup( $user_id, $group_id ) {
+		return $this->makeRequest( 'group-membership-update', array(
+					'group-id' => $group_id,
+					'principal-id' => $user_id,
+					'is-member' => 'false'
+				) );
+
+	}
+
+	/**
+	 * check an individual user's access level to a meeting
+	 * 
+	 * @param string $meeting_id
+	 * @param string $user_id
+	 * 
+	 * @return string
+	 */
+	public function checkUserAccess( $meeting_id, $user_id ) {
+
+		return $this->makeRequest( 'permissions-info', array(
+					'acl-id' => $meeting_id,
+					'principal-id' => $user_id
+						)
+		);
+
+	}
+
+	/**
+	 * change a user's password, would be used only in rare occasions
+	 * 
+	 * @param string $user_id
+	 * @param string $new_password
+	 * @return mixed
+	 */
+	public function changePassword( $user_id, $new_password ) {
+
+		return $this->makeRequest( 'user-update-pwd', array(
+					'user-id' => $user_id,
+					'password' => $new_password,
+					'password-verify' => $new_password
+				) );
+
+	}
+
 	public function __destruct() {
+
 		@curl_close( $this->curl );
 
 	}
@@ -332,6 +485,7 @@ class Connect
 		$url = self::BASE_DOMAIN;
 		$url .= 'xml?action=' . $action;
 		$url .= '&' . http_build_query( $params );
+
 		curl_setopt( $this->curl, CURLOPT_URL, $url );
 
 
@@ -357,7 +511,7 @@ class Connect
 		$data = json_decode( $json, TRUE ); // nice hack!
 
 		if ( !isset( $data['status']['@attributes']['code'] ) || $data['status']['@attributes']['code'] !== 'ok' ) {
-			throw new Exception( 'Couldn\'t perform the action: ' . $action );
+			throw new Exception( 'Error performing action: ' . $action . ', ' . $data['status']['@attributes'] );
 		}
 
 		return $data;
