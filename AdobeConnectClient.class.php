@@ -5,7 +5,7 @@
  * fork by Jesse Keane
  * @see https://github.com/jarofghosts/AdobeConnect-php-api-client
  * @see http://help.adobe.com/en_US/connect/8.0/webservices/index.html
- * @version 1
+ * @version 1.1
  *
  * Copyright 2012, sc0rp10
  * https://weblab.pro
@@ -23,26 +23,27 @@ class Connect
 	 * adobe connect username
 	 */
 
-	const USERNAME = '';
+	const USERNAME = 'username';
 
 	/**
 	 * @const
 	 * adobe connect password
 	 */
-	const PASSWORD = '';
+	const PASSWORD = 'password';
 
 	/**
 	 * @const
 	 *  personal api URL
 	 */
-	const BASE_DOMAIN = '';
+	const BASE_DOMAIN = 'https://yoururl.adobeconnect.com/api/';
 
 	/**
 	 * @const
 	 * personal root folder id
 	 * @see http://forums.adobe.com/message/2620180#2620180
 	 */
-	const ROOT_FOLDER_ID = 0; //root folder id
+	const ROOT_FOLDER_ID = 1; //root folder id
+	const DEFAULT_HOST = 1; // ID of default host for addHost
 
 	/**
 	 * @var string filepath to cookie-jar file
@@ -70,6 +71,7 @@ class Connect
 	 *
 	 */
 	public function __construct() {
+
 		$this->cookie = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'cookie_' . time() . '.txt';
 		$ch = curl_init();
 		curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, 1 );
@@ -95,6 +97,7 @@ class Connect
 		'login' => self::USERNAME,
 		'password' => self::PASSWORD
 	) ) {
+
 		$login_array['external-auth'] = 'use';
 		$this->makeRequest( 'login', $login_array );
 
@@ -110,14 +113,11 @@ class Connect
 	 * @return array
 	 */
 	public function getCommonInfo() {
+
 		return $this->makeRequest( 'common-info' );
 
 	}
-	/**
-	 * change user to perform all actions afterwards
-	 * 
-	 * @param array $credentials
-	 */
+	
 	public function asUser( $credentials = array(
 		'login' => self::USERNAME,
 		'password' => self::PASSWORD ) ) {
@@ -139,6 +139,7 @@ class Connect
 	 * @return array
 	 */
 	public function createUser( $email, $password, $first_name, $last_name, $type = 'user' ) {
+
 		$result = $this->makeRequest( 'principal-update', array(
 			'first-name' => $first_name,
 			'last-name' => $last_name,
@@ -159,6 +160,7 @@ class Connect
 	 * @return string
 	 */
 	public function getCookie() {
+
 		return $this->cookie_string;
 
 	}
@@ -173,6 +175,7 @@ class Connect
 	 *
 	 */
 	public function getUserByEmail( $email, $only_id = false ) {
+
 		$result = $this->makeRequest( 'principal-list', array(
 			'filter-email' => $email
 				)
@@ -196,8 +199,8 @@ class Connect
 	 * @return mixed
 	 */
 	public function updateUser( $email, array $data = array( ) ) {
-		$principal_id = $this->getUserByEmail( $email, true );
-		$data['principal-id'] = $principal_id;
+
+		$data['principal-id'] = $this->getUserByEmail( $email, true );
 		return $this->makeRequest( 'principal-update', $data );
 
 	}
@@ -208,6 +211,7 @@ class Connect
 	 * @return array
 	 */
 	public function getUsersList() {
+
 		$users = $this->makeRequest( 'principal-list' );
 		$result = array( );
 		foreach ( $users['principal-list']['principal'] as $key => $value ) {
@@ -236,7 +240,7 @@ class Connect
 	 */
 	public function getUrlBase() {
 
-		return substr(self::BASE_DOMAIN, 0, -5);
+		return substr( self::BASE_DOMAIN, 0, -5 );
 
 	}
 
@@ -265,7 +269,7 @@ class Connect
 	 */
 	public function createFolder( $name, $parent_folder = null ) {
 
-		$parent_folder = $parent_folder ? : self::FOLDER_ID;
+		$parent_folder = $parent_folder ? : self::ROOT_FOLDER_ID;
 
 		$result = $this->makeRequest( 'sco-update', array(
 			'type' => 'folder',
@@ -284,6 +288,7 @@ class Connect
 	 * @param string $search
 	 */
 	public function checkFolder( $search ) {
+
 		$results = $this->makeRequest( 'sco-search-by-field', array(
 			'query' => $search,
 			'filter-type' => 'folder',
@@ -309,11 +314,11 @@ class Connect
 
 		$result = $this->makeRequest( 'sco-update', array(
 			'type' => 'meeting',
-			'name' => $name,
+			'name' => $name . date( ' m-d-Y', strtotime( $date_begin )),
 			'description' => $description,
 			'folder-id' => $folder_id,
-			'date-begin' => date( 'Y-m-d\TH:i:sO', strtotime( $date_begin ) ),
-			'date-end' => date( 'Y-m-d\TH:i:sO', strtotime( $date_end ) )
+			'date-begin' => date( 'Y-m-d\TH:i:sO', strtotime( $date_begin )),
+			'date-end' => date( 'Y-m-d\TH:i:sO', strtotime( $date_end ))
 				)
 		);
 		return $result['sco']['@attributes']['sco-id'];
@@ -333,16 +338,15 @@ class Connect
 	 */
 	public function updateMeeting( $meeting_id, $name, $description, $date_begin, $date_end ) {
 
-		$result = $this->makeRequest( 'sco-update', array(
-			'type' => 'meeting',
-			'name' => $name,
-			'description' => $description,
-			'sco-id' => $meeting_id,
-			'date-begin' => date( 'Y-m-d\TH:i:sO', strtotime( $date_begin ) ),
-			'date-end' => date( 'Y-m-d\TH:i:sO', strtotime( $date_end ) )
-				)
+		return $this->makeRequest( 'sco-update', array(
+					'type' => 'meeting',
+					'name' => $name . date( ' m-d-Y', strtotime( $date_begin ) ),
+					'description' => $description,
+					'sco-id' => $meeting_id,
+					'date-begin' => date( 'Y-m-d\TH:i:sO', strtotime( $date_begin ) ),
+					'date-end' => date( 'Y-m-d\TH:i:sO', strtotime( $date_end ) )
+						)
 		);
-		return $result['sco']['@attributes']['sco-id'];
 
 	}
 
@@ -350,16 +354,19 @@ class Connect
 	 * invite user to meeting
 	 *
 	 * @param int    $meeting_id
-	 * @param string $email
+	 * @param int $user_id
+	 * @param string $permission
 	 *
 	 * @return mixed
 	 */
-	public function addUserToMeeting( $meeting_id, $user_id ) {
+	public function addUserToMeeting( $meeting_id, $user_id, $permission = 'view' ) {
+
+		$user_id = $permission === 'host' ? self::DEFAULT_HOST : $user_id;
 
 		$result = $this->makeRequest( 'permissions-update', array(
 			'principal-id' => $user_id,
 			'acl-id' => $meeting_id,
-			'permission-id' => 'view'
+			'permission-id' => $permission
 				)
 		);
 
@@ -371,11 +378,10 @@ class Connect
 	 * revoke a user's access to a meeting
 	 * 
 	 * @param string $meeting_id
-	 * @param string $email
+	 * @param string $user_id
 	 * @return mixed
 	 */
-	public function removeUserFromMeeting( $meeting_id, $email ) {
-		$user_id = $this->getUserByEmail( $email, true );
+	public function removeUserFromMeeting( $meeting_id, $user_id ) {
 
 		$result = $this->makeRequest( 'permissions-update', array(
 			'principal-id' => $user_id,
@@ -386,6 +392,7 @@ class Connect
 		return $result;
 
 	}
+
 
 	/**
 	 * get all users associated with the meeting
@@ -399,6 +406,39 @@ class Connect
 					'acl-id' => $meeting_id
 						)
 		);
+
+	}
+
+	/**
+	 * return most relevant recording information for a meeting
+	 * @param string $meeting_id
+	 * @return array
+	 */
+	public function getMeetingDetails( $meeting_id ) {
+
+		$response = $this->makeRequest( 'sco-expanded-contents', array(
+			'sco-id' => $meeting_id
+			, 'filter-icon' => 'archive'
+				)
+		);
+		// array will be empty if no recordings
+		if ( empty( $response['expanded-scos'] ) ) {
+			return false;
+		}
+		if ( isset( $response['expanded-scos']['sco'][0] ) ) {
+			$index = count( $response['expanded-scos']['sco'] ) - 1;
+			return (object) array(
+						'sco_id' => $response['expanded-scos']['sco'][$index]['@attributes']['sco-id'],
+						'name' => $response['expanded-scos']['sco'][$index]['name'],
+						'url' => $response['expanded-scos']['sco'][$index]['url-path']
+			);
+		} else {
+			return (object) array(
+						'sco_id' => $response['expanded-scos']['sco']['@attributes']['sco-id'],
+						'name' => $response['expanded-scos']['sco']['name'],
+						'url' => $response['expanded-scos']['sco']['url-path']
+			);
+		}
 
 	}
 
@@ -427,6 +467,7 @@ class Connect
 	 * @return mixed
 	 */
 	public function removeUserFromGroup( $user_id, $group_id ) {
+
 		return $this->makeRequest( 'group-membership-update', array(
 					'group-id' => $group_id,
 					'principal-id' => $user_id,
@@ -482,6 +523,7 @@ class Connect
 	 * @return mixed
 	 * @throws Exception
 	 */private function makeRequest( $action, array $params = array( ) ) {
+
 		$url = self::BASE_DOMAIN;
 		$url .= 'xml?action=' . $action;
 		$url .= '&' . http_build_query( $params );
@@ -511,7 +553,8 @@ class Connect
 		$data = json_decode( $json, TRUE ); // nice hack!
 
 		if ( !isset( $data['status']['@attributes']['code'] ) || $data['status']['@attributes']['code'] !== 'ok' ) {
-			throw new Exception( 'Error performing action: ' . $action . ', ' . $data['status']['@attributes'] );
+
+			throw new Exception( 'Error performing action: ' . $action);
 		}
 
 		return $data;
